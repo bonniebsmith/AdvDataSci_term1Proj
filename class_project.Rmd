@@ -1,136 +1,219 @@
 ---
-title: 'Class Project: Analysis of PLOS Analyses'
+title: "Statistical techniques used for work published in the Public Library of Science"
 author: "Bonnie Smith"
-date: "September 11, 2017"
+date: "October 11, 2017"
 output:
   html_document: default
   pdf_document: default
+subtitle: Class project for Advanced Data Science I
 ---
 
-**Question:** 
+### Introduction ###
 
-In this project, we perform an analysis of the statistical techniques used in published Public Library of Science (PLoS) papers.  We identify the most common techniques and whether they vary by field, as well as trends over time.
+The Public Library of Science (PLoS) is a collection of open-access journals representing a variety of sub-fields with connections to biology.  The discipline-specific journals in the collection are PLoS Biology, PLoS Medicine, PLoS Computational Biology, PLoS Genetics, PLoS Pathogens, and PLoS Neglected Tropical Diseases.  The inception of these six journals ranges from October 2003 (PLos Biology) to October 2007 (PLoS Neglected Tropical Diseases).  Note that there is also a catch-all journal, PLoS ONE, which we shall ignore for the purpose of this analysis.
 
-**Background about PLoS:** 
+In this project, we examine the statistical techniques used in research articles published in the six discipline-specific PLoS journals.  We identify common techniques, and whether they vary by journal and year of publication date.  Specifically, we address two questions of interest:  
 
-The fields represented in Public Library of Science (PLoS) journals are Biology (since October 2003), Computational Biology (since June 2005), Neglected Tropical Disease (since October 2007), Medicine (since October 2004), Genetics (since July 2005), and Pathogens (since September 2005).
+   1.  Out of a list of statistical techniques used in PLoS articles (which we formulate as discussed below), identify the 5 most widely used in each discipline in 2016, and the 5 most widely used in each disipline in 2010.  
+   
+   2.  Group a subset of statistical techniques into 4 groups by theme, and examine the popularity of each group in each year from 2010 to 2016.  Identify disciplines where the change over time is greatest and least.
 
-The `rplos` package, found in the `rplos` library, allows us to interface with the PLoS API directly in R.  The following are some notes on the `rplos` package: 
+### Methods ###
 
-`searchplos(q='field:myquery',fl="field",fq="filter query")` is the base function.  Fields are listed in the data set `plosfields`---I will primarily be using the fields "journal" (full journal name, in quotes), "materials_and_methods", "publication_date", and "title".  
+Using the `rplos` package, which allows us to interface with the PLoS API directly in R, we search the library of PLoS papers for certain keywords, comprising our statistical techniques of interest.  Identification of this list of keywords is discussed below.  We restrict our search to full-length 'research articles' only (as opposed to 'viewpoints', 'correspondence', etc.);  the following table gives the number of full-length research articles that have appeared in each journal to date.  
 
-In our project we will be searching the Materials and Methods sections of PLoS papers for certain keywords, and we wish to stratify the results both by journal and by time.  As an example, suppose we are searching only for papers in the PLoS Pathogens journal which contain the word "regression" in their Materials and Methods sections.  If we want our query to return the title, journal, and publication date for each result, with the results sorted chronologically by publication date, then we have the following code:
-
-
-```{r by_journal}
+```{r numbers by journal,echo=FALSE}
 
 library(rplos)
 
-searchplos(q="materials_and_methods:regression", fl=c("title","journal","publication_date"),
-    fq= 'journal:"PLoS Pathogens"', sort='publication_date asc',limit=7)
+num_path=searchplos(q="*:*", fl="publication_date",
+      fq=list('journal:"PLoS Pathogens"', 'doc_type:full', 'article_type:"Research Article"'))$meta$numFound
+
+num_gen=searchplos(q="*:*", fl="journal",
+      fq=list('journal:"PLoS Genetics"', 'doc_type:full', 'article_type:"Research Article"'))$meta$numFound
+
+num_bio=searchplos(q="*:*", fl="journal",
+      fq=list('journal:"PLoS Biology"', 'doc_type:full', 'article_type:"Research Article"'))$meta$numFound
+
+num_comp_bio=searchplos(q="*:*", fl="publication_date",
+      fq=list('journal:"PLoS Computational Biology"', 'doc_type:full', 'article_type:"Research Article"'))$meta$numFound
+
+num_trop=searchplos(q="*:*", fl="journal",
+      fq=list('journal:"PLoS Neglected Tropical Diseases"', 'doc_type:full', 'article_type:"Research Article"'))$meta$numFound
+
+num_med=searchplos(q="*:*", fl="journal",
+      fq=list('journal:"PLoS Medicine"', 'doc_type:full', 'article_type:"Research Article"'))$meta$numFound
+
+library(knitr)
+
+x=matrix(c(num_bio, num_med, num_comp_bio, num_gen, num_path, num_trop),nrow=1)
+
+kable(x,col.names=c("PLos Bio","PLoS Medicine", "PLoS Comp. Bio.","PLoS Genetics","PLoS Pathogens","PLoS Trop. Diseases"),caption="Total number of research articles that have appeared in each PLoS journal")
 
 ```
 
-**Data collection:**
-
-To consider:  Will we bin results by date? e.g. by year/quarter/month?  We can also move through the chronologically-ordered dates using the following code:
-
-```{r by_date}
-
-searchplos(q="materials_and_methods:regression", fl=c("title","journal","publication_date"),
-    fq= 'journal:"PLoS Pathogens"', sort='publication_date asc',start=5, limit=7)
-
-```
-
-Next we develop a strategy for forming our list of keywords to search.  We will take random samples of PLoS articles (by journal and time period), read in the Materials and Methods sections, and add to our list any statistical method that is mentioned.  We could then take further random samples (or the entire data, or the entire training set), and check how many articles contained zero of the proposed list of keywords, as a check for whether our putative list is fairly comprehensive.
-
-The following code shows how many total (full-length) articles there are in each journal.  We then randomly sample integers from each portion.
-
-```{r facets}
-
-facetplos(q='*:*',facet.field='journal',fq='doc_type:full')
-
-vec_1=sample(1000,4)
-vec_2=sample(1001:2000,2)
-vec_3=sample(2001:3000,2)
-vec_3a=sample(3001:3399,2)
-vec_4=sample(3001:4000,2)
-vec_4a=sample(4001:4528,2)
-vec_5=sample(4001:5000,2)
-vec_5a=sample(5001:5365,2)
-vec_5b=sample(5001:5682,2)
-vec_6=sample(5001:6000,2)
-vec_6a=sample(6001:6377,2)
-vec_6b=sample(6001:6948,2)
-
-```
-
-We will fix the results.  
-
-```{r samples}
-
-vec_1_1000=c(399, 31, 119, 983)
-
-vec_1001_2000=c(1822, 1779)
-
-vec_2001_3000=c(2096, 2049)
-
-vec_3001_3399=c(3191, 3222)
-
-vec_3001_4000=c(3673, 3658)
-
-vec_4001_4528=c(4210, 4340)
-
-vec_4001_5000=c(4455, 4575)
-
-vec_5001_5365=c(5046, 5030)
-
-vec_5001_5682=c(5558, 5592)
-
-vec_5001_6000=c(5297, 5585)
-
-vec_6001_6377=c(6039, 6041)
-
-vec_6001_6948=c(6058, 6715)
-```
+We further restrict our search to the "Materials and Methods" section of the articles, and stratify the results both by journal and by year of publication. 
 
 
-```{r  sampling}
 
-#arts=searchplos(q="*:*", fl=c("title","journal","publication_date","materials_and_methods"),
-    #  fq=list('journal:"PLoS Genetics"', 'doc_type:full'),sort='publication_date asc',start=6001, limit=6948)
 
-#arts$data[vec_6001_6948,]
+In order to form our list of keywords to search, we take a random sample of 100 PLoS articles, which is representative of all PLoS research articles in terms of journal and time period.  We read in the 'Materials and Methods' sections of the articles in our sample, check each by hand, and add any statistical methods mentioned to our list of keywords.  This list has been refined slightly and roughly organized into categories below.
+
+**List of Keywords: **
+
+   * **ANOVA**.  **Chi-square**.  **Fisher's exact test**. **T test**. 
+
+   * **Kaplan-Meier**.  **Cox** proportional hazard/Cox regression.  
+
+   * **Wilcoxon** rank-sum test/Mann-Whitney U-test.  **Nonparametric**.
+
+   * **Cross validation**.  **Machine learning**.  **Lasso** regression.  Lowess.  Kernel density.  Penalized spline regression.
+
+   * K-means **clustering**/ hierarchical clustering.  Singular value decomposition/**principal components**.
+
+   * **Linear regression**.  **Logistic regression**.  Generalized linear models /Poisson regression.  Likelihood ratio test.  Mixed-effect model/**random-effect model**/linear mixed model.  **Generalized estimating equations**.
+
+   * **Simulations**.  **Bootstrap**.  
+
+   * **Markov chain Monte Carlo**.  Multiple imputation.  Hidden Markov model.  **Empirical Bayes**.  **Bayesian**.
+   
+   
+In order to examine trends across journal and accross years, for each keyword, for each of 4 journals, we compute the proportion of the journal's research articles from 2009 and 2010 which contain that keyword.  We then do the same for 2016-2017.  Results are displayed below.
+
+### Results and Discussion
+
+```{r  list, echo=FALSE, message=FALSE}
+
+library(stringr)
+library(rebus)
+
+
+
+### list of search terms
+
+my_list=c('materials_and_methods:ANOVA','materials_and_methods:"t test"','materials_and_methods:"chi square"','materials_and_methods:"Fisher exact test"','materials_and_methods:Wilcoxon', 'materials_and_methods:"linear regression"','materials_and_methods:"logistic regression"','materials_and_methods:"Kaplan-Meier"','materials_and_methods:Cox','materials_and_methods:"generalized estimating equation"','materials_and_methods:"random effect model"', 'materials_and_methods:"cross validation"', 'materials_and_methods:"machine learning"', 'materials_and_methods:lasso','materials_and_methods:clustering','materials_and_methods:"principal components"',   'materials_and_methods:simulation', 'materials_and_methods:bootstrap', 'materials_and_methods:"Markov chain Monte Carlo"', 'materials_and_methods:"empirical Bayes"','materials_and_methods:Bayesian',  'materials_and_methods:nonparametric','materials_and_methods:*')
+
+#my_list
+
+N=length(my_list)
 
 ```
 
-Pathogens articles:
+```{r bio counts,echo=FALSE,eval=FALSE}
 
-399:  **Fisher's exact test**.  **Kaplan-Meier log rank test**.  Mann-Whitney t-test.  31: **Student's t-test**.  **One-way analysis of variance**.  119:  none mentioned.  983:  No MM section (correction)  1822:  One-way ANOVA.  Logrank Test.  t-test.  1779: none mentioned.  2096:  unpaired Student's t-test.  2049: none mentioned.  3673: **linear regression**, **ANOVA**, t-test.  3658:  none mentioned.  4455:  none mentioned.  4575:  student test.  Wilcoxon Mann-Whitney rank sum test.  **Chi-square test**.  5297:  One-way ANOVA.  Tukey's HSD.  Pairwise student's t-test.  5585:  No MM section.  6039:  Student's T-test.  **Mann-Whitney U-test (nonparametric statistics)**.  6041:  none mentioned.
+bio_searches=lapply(my_list,function(x) searchplos(x,fl="publication_date",
+      fq= list('doc_type:full', 'article_type:"Research Article"',
+               'journal:"PLoS Biology"'),limit=2400 ) )
+
+bio_words_2010=vector(length=N)
+for(n in 1:N){
+      bio_words_2010[n]=sum(str_count(bio_searches[n],pattern=or("2009","2010")))
+}
+
+round(bio_words_2010/bio_words_2010[N],3)
+
+bio_words_2016=vector(length=N)
+for(n in 1:N){
+      bio_words_2016[n]=sum(str_count(bio_searches[n],pattern=or("2016","2017")))
+}
+
+round(bio_words_2016/bio_words_2016[N],3)
+
+```
+
+```{r comp bio counts,echo=FALSE,eval=FALSE}
+
+cb_searches=lapply(my_list, function(x) searchplos(x,fl="publication_date",
+      fq= list('doc_type:full', 'article_type:"Research Article"',
+               'journal:"PLoS Computational Biology"'),limit=4750 ))
+
+cb_words_2010=vector(length=N)
+for(n in 1:N){
+      cb_words_2010[n]=sum(str_count(cb_searches[n],pattern=or("2010","2009")))
+}
+
+round(cb_words_2010/cb_words_2010[N],3)
+
+cb_words_2016=vector(length=N)
+for(n in 1:N){
+      cb_words_2016[n]=sum(str_count(cb_searches[n],pattern=or("2016","2017")))
+}
+
+round(cb_words_2016/cb_words_2016[N],3)
+
+```
+
+```{r gen counts,echo=FALSE,eval=FALSE}
+
+gen_searches=lapply(my_list,function(x) searchplos(x,fl="publication_date",
+      fq= list('doc_type:full', 'article_type:"Research Article"',
+               'journal:"PLoS Genetics"'),limit=6200 ))
+
+gen_words_2010=vector(length=N)
+for(n in 1:N){
+      gen_words_2010[n]=sum(str_count(gen_searches[n][[1]]$data,pattern=or("2010","2009")))
+}
+
+round(gen_words_2010/gen_words_2010[N],3)
+
+gen_words_2016=vector(length=N)
+for(n in 1:N){
+      gen_words_2016[n]=sum(str_count(gen_searches[n][[1]]$data,pattern=or("2016","2017")))
+}
+
+round(gen_words_2016/gen_words_2016[N],3)
+
+```
+
+```{r medicine counts,echo=FALSE,eval=FALSE}
+
+med_searches=lapply(my_list,function(x) searchplos(x,fl="publication_date",
+      fq= list('doc_type:full', 'article_type:"Research Article"',
+               'journal:"PLoS Medicine"'),limit=1400 ))
+
+med_words_2010=vector(length=N)
+for(n in 1:N){
+      med_words_2010[n]=sum(str_count(med_searches[n],pattern=or("2010","2009")))
+}
+
+round(med_words_2010/med_words_2010[N],3)
+
+med_words_2016=vector(length=N)
+for(n in 1:N){
+      med_words_2016[n]=sum(str_count(med_searches[n],pattern=or("2016","2017")))
+}
+
+round(med_words_2016/med_words_2016[N],3)
+
+```
 
 
-Computational Biology articles:
+```{r table,echo=FALSE}
 
-399:  unsupervised learning.  hierarchical model.  31: none mentioned.  119:  No MM section.  983:  none mentioned.  1822:  No MM section.  1779: one-way ANOVA.  **linear regression**.  paired t-test.  linear state-space models.  2096:  none mentioned.  2049: Fisher's exact test. chi-square test.  motif.  3673: **Markov chain**.  3658:  none mentioned.  4455:  **least squares estimatio**n.  **singular value decomposition**.  t-test.  **Markov model**.  4575: **clustering algorithm.  K-means**.  5046:  No MM section.  5030:  No MM section
+prop_bio_2010=c(.169,.614,.029,.029,.042,.050,.016,.024,.008,.000,.003,.019,.003,.008,.151,.029,.143,.058,.005,.003,.048,.032,1.000)
 
-Neglected Tropical Diseases:
+prop_bio_2016=c(.269,.756,.063,.026,.085,.089,.030,.015,.022,.004,.000,.055,.004,.004,.262,.018,.210,.092,.018,.004,.063,.063,1.000)
 
-399:  **Cox proportional hazards model**.  Wald test.  31: Fixed effect model.  **Random effect model**.  119:  **Logistic regression**.  Pearson's chi-square.  983:  **Kaplan-Meier estimator**.  ANOVA.  backward elimination.   1822:  none mentioned.  1779: ANOVA.  2096: none mentioned.  2049: negative binomial regression.  **generalized linear models** (log-link function).  **maximum likelihood estimation**.  **logistic regression**.  3673: linear regression.  time series.  **autoregressive process**.  3658:  **principal components**.  paired t-test.  4455:  No MM section.  4575:  No MM section.  5558:  Poisson regression.  **likelihood ratio test**.  5592:  No MM section.
+prop_cb_2010=c(.027,.482,.017,.027,.027,.043,.010,.000,.000,.000,.004,.074,.032,.003,.261,.052,.553,.065,.014,.004,.082,.017,1.000)
 
-Biology articles:
+prop_cb_2016=c(.046,.531,.018,.017,.028,.062,.029,.005,.011,.000,.002,.100,.043,.030,.238,.057,.633,.072,.030,.006,.109,.014,1.000)
 
-399:  No MM section.  **31: Kaplan-Meier method**.  Log rank tests.  119:  No MM section.  983:  none mentioned.  1822:  One-way ANOVA.  Logrank Test.  t-test.  1779: none mentioned.  2096:  none mentioned.  2049: none mentioned.  3673: No MM section.  3658:  **adaptive management**.
+prop_gen_2010=c(.083,.692,.082,.059,.035,.080,.054,.016,.023,.006,.006,.014,.003,.002,.200,.041,.109,.080,.015,.011,.065,.012,1.000)
 
-Medicine articles:
+prop_gen_2016=c(.165,.739,.068,.079,.049,.078,.044,.024,.033,.001,.005,.017,.002,.005,.199,.085,.092,.066,.006,.007,.034,.010,1.000)
 
-399:  No MM section.  31:  No MM section.  119: **Wilcoxon rank sum test**.  unpaired t-test.  **Bonferroni correction**.  983:  No MM section.  1822:  none mentioned.  1779:  No MM section.  2096:  No MM section.  2049:  No MM section.  3191:  No MM section.  3222:  none mentioned.
+prop_med_2010=c(.044,.844,.231,.094,.075,.038,.262,.106,.144,.038,.069,.031,.000,.006,.181,.019,.188,.075,.050,.0000,.088,.069,1.000)
 
-Genetics articles:
+prop_med_2016=c(.063,.830,.137,.089,.056,.181,.267,.093,.196,.015,.052,.026,.000,.007,.263,.070,.107,.096,.019,.004,.063,.033,1.000)
 
-399:  **Imputation**.  **Bayesian regression**.  Bayesian approach.  Jeffreys' prior.  **sensitivity analysis**.  **functional studies**.  **multiple imputation**.  31: Fisher exact test.  **Wilcoxon rank sum test**.  119:  none mentioned.  983:  Fisher exact test.  chi-square test.  1822:  none mentioned.  1779: No MM section.  2096:  No MM section.  2049: none mentioned.  3673: none mentioned.  3658:  ANOVA.  **Kruskall-Wallis**.  linear regression.  **non-linear regression**.  **AIC**.  **BIC**.  random effects.  **general linear model**.  Wilcoxon rank-sum test.  4455:  **bootstrap**.  Bayes.  AIC.  approximate likelihood ratio test.  chi-squared distribution.  4575:  none mentioned.  5297:  **Benjamini-Hochberg correction**.  **multiple testing**.  **Pearson correlation coefficient**.  5585:  none?  6058:  none mentioned.  6715: unpaired t-test.
+word_table=data.frame(prop_bio_2010, prop_bio_2016, prop_cb_2010, prop_cb_2016, prop_gen_2010, prop_gen_2016, prop_med_2010, prop_med_2016)
 
-**Draft list of keywords:**  
+row.names(word_table)=c("ANOVA","t test","chi square", "Fisher exact test","Wilcoxon", "linear regression", "logistic regression", "Kaplan-Meier", "Cox","generalized estimating equation", "random effect model", "cross validation", "machine learning","lasso", "clustering","principal components", "simulation", "bootstrap", "Markov chain Monte Carlo", "empirical Bayes", "Bayesian", "nonparametric","(any word)")
 
-Fisher's exact test, Kaplan-Meier log rank test, t-test, linear regression, ANOVA, chi-square test, Markov model, singular value decomposition, clustering algorithm, K-means, Cox proportional hazards, random effects model, logistic regression, principal components, likelihood ratio test hierarchical model.  maximum likelihood estimation, general linear model, bootstrap, Bayesian regression
+colnames(word_table)=c("Biology, 2009-10", "Biology, 2016-17", "Comp. Bio., 2009-2010", "Comp. Bio., 2016-17", "Genetics, 2009-10", "Genetics, 2016-17", "Medicine, 2009-10", "Medicine, 2016-17")
+
+kable(word_table,caption="Proportion of a journal's research articles containing the keyword, in 2009-2010 vs. 2016-2017")
+
+```
 
 
